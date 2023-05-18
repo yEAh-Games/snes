@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+
+<head>
+  <link rel="stylesheet" type="text/css" href="/assets/css/style.css">
+  <title>yEAh SNES emulator | YGP</title>
+</head>
+
+<body>
+  {% assign hirom_file = 'hirom' %}
+  {% assign hirom_path = page.path | append: hirom_file %}
+
+  <input id="ishirom" style="display:none!important;" type="checkbox" {% if site.static_files | where: "path" ,
+    hirom_path | size> 0 %} checked {% endif %}>
+  <button id="pause">Pause</button>
+  <button id="reset">Reset</button>
+  <button id="hardreset">Power</button>
+  <br>
+  <canvas id="output"></canvas>
+
+  <pre style="display:none!important" id="log"></pre>
+
+  <script src="/assets/lib/zip.js"></script>
+  <script src="/assets/lib/inflate.js"></script>
+
+  <script src="/assets/snes/cart.js"></script>
+  <script src="/assets/snes/dsp.js"></script>
+  <script src="/assets/snes/spc.js"></script>
+  <script src="/assets/snes/apu.js"></script>
+  <script src="/assets/snes/pipu.js"></script>
+  <script src="/assets/snes/cpu.js"></script>
+  <script src="/assets/snes/snes.js"></script>
+
+  <script src="/assets/js/audio.js"></script>
+  <script src="/assets/js/trace.js"></script>
+  <script src="/assets/js/main.js"></script>
+
+  <script id="gameloader">
+    const predeterminedUrl = "./game.smc";
+    function loadFileFromUrl(url, callback) {
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", url, true);
+      xhr.responseType = "arraybuffer";
+      xhr.onload = function () {
+        if (xhr.status === 200) {
+          callback(xhr.response);
+        } else {
+          log("Failed to load file from URL: " + url);
+        }
+      };
+      xhr.send();
+    }
+    loadFileFromUrl(predeterminedUrl, function (buffer) {
+      if (predeterminedUrl.slice(-4) === ".zip") {
+        let blob = new Blob([buffer]);
+        zip.createReader(new zip.BlobReader(blob), function (reader) {
+          reader.getEntries(function (entries) {
+            if (entries.length) {
+              let found = false;
+              for (let i = 0; i < entries.length; i++) {
+                let name = entries[i].filename;
+                if (name.slice(-4) !== ".smc" && name.slice(-4) !== ".sfc") {
+                  continue;
+                }
+                found = true;
+                log("Loaded \"" + name + "\" from zip");
+                entries[i].getData(new zip.BlobWriter(), function (blob) {
+                  let breader = new FileReader();
+                  breader.onload = function () {
+                    let rbuf = breader.result;
+                    romArr = new Uint8Array(rbuf);
+                    loadRom(romArr);
+                    reader.close(function () { });
+                  };
+                  breader.readAsArrayBuffer(blob);
+                }, function (curr, total) { });
+                break;
+              }
+              if (!found) {
+                log("No .smc or .sfc file found in zip");
+              }
+            } else {
+              log("Zip file was empty");
+            }
+          });
+        }, function (err) {
+          log("Failed to read zip: " + err);
+        });
+      } else {
+        romArr = new Uint8Array(buffer);
+        loadRom(romArr);
+      }
+    });
+  </script>
+</body>
+
+</html>
